@@ -17,16 +17,22 @@ if _osgeo4w_proj.is_dir() and (_osgeo4w_proj / "de_adv_BETA2007.tif").exists():
             ";" + _proj_data if _proj_data else ""
         )
 
-# --- Module ---
-from core.core import VERSION, logger  # noqa: F401, E402
 
 # --- Drittanbieter-Bibliotheken ---
 from lxml import etree as ET  # noqa: E402
 from pyproj import Transformer  # noqa: E402
 
+# --- Module ---
+from core.core import logger  # noqa: E402
+
+# --- Reguläre Ausdrücke ---
+_RE_SWITCH_NAME = re.compile(
+    r"(?:\d+\s*)?[A-Za-z]*W[A-Za-z]*\s*(\d+)\s*(a/b|c/d|[a-dA-D])?",
+    re.IGNORECASE,
+)
+
+
 # Hilfsfunktionen
-
-
 def _successor_side(connection: int, idx: int, direction: str) -> str:
     """'g' oder 'b' — Seite des idx-ten Nachfolgers, die an E anschließt.
 
@@ -64,8 +70,6 @@ class _UnionFind:
 
 
 # Hauptklasse
-
-
 class st3Converter:
     """Konvertiert eine Zusi-3-Streckendatei (.st3) in ein Knoten-Kanten-Modell.
 
@@ -79,17 +83,18 @@ class st3Converter:
         input_path: str,
         target_epsg: int = 31467,
         auto_detect_crs: bool = True,
+        normalize_switch_names: bool = True,
         progress_callback=None,
     ):
         self.input_path = Path(input_path)
         self.target_epsg = target_epsg
         self.auto_detect_crs = auto_detect_crs
+        self._normalize_switch_names = normalize_switch_names
         self._cb = progress_callback or (lambda cur, total, msg: None)
         self._stem = self.input_path.stem
         self.warnings: list = []
 
     # Public API
-
     def convert(self):
         """Führt die vollständige Konvertierung in 8 Schritten durch.
 
@@ -141,7 +146,6 @@ class st3Converter:
         return result
 
     # Schritt 1 – XML einlesen und StrElemente sammeln
-
     def _parse_xml(self):
         tree = ET.parse(str(self.input_path))
         root = tree.getroot()
@@ -280,7 +284,6 @@ class st3Converter:
         return elems, utm_epsg
 
     # Schritt 2 – Element-Seiten-Topologie aufbauen (Union-Find)
-
     def _build_topology(self, elems):
         uf = _UnionFind()
 
@@ -314,7 +317,6 @@ class st3Converter:
         return vertex_inc, uf
 
     # Schritt 3 – Modulgrenz-Vertices registrieren
-
     def _module_vertices(self, elems, uf):
         """Rückgabe: dict vertex_id → nachbarmodul_stem"""
         module_vertices = {}
@@ -328,7 +330,6 @@ class st3Converter:
         return module_vertices
 
     # Schritt 4 – Breakpoints klassifizieren
-
     def _classify_breakpoints(self, vertex_inc, module_vertices, elems, uf):
         """Rückgabe: (bp_set, nodes_raw)
         bp_set:     set von Vertex-IDs, die Breakpoints sind
@@ -389,7 +390,7 @@ class st3Converter:
             suffix_map = {"Modulgrenze": "G", "Gleisende": "E"}
             for typ in typen:
                 if signal_name:
-                    if typ == "Weiche":
+                    if typ == "Weiche" and self._normalize_switch_names:
                         knotenname = self._normalize_switch_name(signal_name)
                     else:
                         knotenname = signal_name
@@ -425,7 +426,9 @@ class st3Converter:
         """Normalisiert einen Weichen-Signalnamen auf das Schema <Nr>[<DKW-Suffix>].
 
         Regeln:
-        - Die erste Zahl im Namen wird extrahiert.
+        - Eine optionale numerische ESTW-Bereichskennziffer vor dem W-Typ-Präfix
+          (z.B. "44" in "44W1") wird ignoriert.
+        - Die erste Zahl nach dem W-Typ-Präfix wird extrahiert.
         - Ein optionaler DKW-Suffix (a, b, c, d, a/b, c/d) direkt nach der Zahl
           wird beibehalten und in Großbuchstaben umgewandelt.
         - Alle anderen Buchstaben davor und danach werden entfernt.
@@ -437,8 +440,12 @@ class st3Converter:
             "DKW 3 A"   → "3A"
             "DKW 3 a/b" → "3A/B"
             "DKW 3 c/d" → "3C/D"
+            "44W1"      → "1"
+            "44EW135"   → "135"
+            "44DKW3A"   → "3A"
         """
-        m = re.search(r"(\d+)\s*(a/b|c/d|[a-dA-D])?", signal_name, re.IGNORECASE)
+        # ESTW: optionale Bereichskennziffer (Ziffern) vor dem W-Typ-Präfix berücksichtigen
+        m = _RE_SWITCH_NAME.search(signal_name)
         if not m:
             return signal_name
         number = m.group(1)
@@ -478,7 +485,6 @@ class st3Converter:
                     tgt["knotenbeschr"] = src["knotenbeschr"]
 
     # Schritt 5 – Topologie-Validierung
-
     def _validate_topology(self, elems, vertex_inc, uf, bp_set):
         # Nulllängen-Elemente (g == b)
         for nr, elem in elems.items():
@@ -557,7 +563,6 @@ class st3Converter:
                 logger.warning(msg)
 
     # Schritt 6 – Graphtraversierung: Kanten bilden
-
     @staticmethod
     def _interpolate_km(elem_seq, pts_utm, elems):
         """Gibt (km_von, km_bis) für eine Kante zurück.
@@ -815,7 +820,6 @@ class st3Converter:
         return elem_seq, pts_utm
 
     # Schritt 7 – Koordinatentransformation (Bulk)
-
     def _transform_coordinates(self, edges_raw, nodes_raw, source_epsg):
         """Transformiert alle Koordinaten von source_epsg nach self.target_epsg."""
         if source_epsg == self.target_epsg:
@@ -849,7 +853,6 @@ class st3Converter:
         return edges_raw, nodes_raw
 
     # Schritt 8 – Layer-Ausgabe
-
     def _build_features(self, edges_tf, nodes_tf):
         """Wandelt interne Feature-Dicts in standardisierte Ausgabe-Dicts um.
 
@@ -885,7 +888,7 @@ class st3Converter:
                         "knotenname": kn["knotenname"],
                         "typ": kn["typ"],
                         "knotenbeschr": kn["knotenbeschr"],
-                        "nr": kn["nr"],
+                        "strelement_nr": kn["nr"],
                         "km": kn["km"],
                         "datei": kn["datei"],
                         "nachbarmodul": kn["nachbarmodul"],

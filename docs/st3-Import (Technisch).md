@@ -7,10 +7,10 @@
 ## Übersicht
 
 Dieses Dokument beschreibt das **Zusi-3-Streckendateiformat** (`.st3`) und das daraus
-abzuleitende **Knoten-Kanten-Modell** für QGIS.
+abzuleitende **Knoten-Kanten-Modell**.
 
 Zusi 3 speichert Streckennetze als XML-Dateien mit geometrischen und topologischen
-Informationen. Ziel ist es, diese in zwei QGIS-Layer zu überführen:
+Informationen. Ziel ist es, diese in zwei Datensätze:
 
 | Layer | Geometrietyp | Inhalt |
 |---|---|---|
@@ -268,22 +268,31 @@ Ein Vertex ist ein **Breakpoint**, wenn:
 Signal-Attribute (`Signalname` sowie Weichenbauart aus dem SignalFrame-Dateinamen → `knotenbeschr`)
 werden dem Knoten angehängt, wenn ein angrenzendes StrElement ein Signal mit `SignalTyp="2"` trägt.
 
-#### Normalisierung des Weichen-Knotennamens
+#### Namen von Weichenknoten normalisieren
 
-Signalnamen von Weichenknoten (Typ `Weiche`) werden vor der Speicherung normalisiert:
+Signalnamen von Weichenknoten (Typ `Weiche`) werden vor dem Speichern normalisiert:
 
+- Eine optionale numerische **ESTW-Bereichskennziffer** vor dem W-Typ-Präfix
+  (z. B. `44` in `44W1`) wird ignoriert.
 - Buchstaben-Präfixe wie `W`, `EW`, `DKW` werden entfernt.
 - Eine optionale DKW-Kennung (`a`, `b`, `c`, `d`, `a/b`, `c/d`) direkt nach der Zahl
   wird in Großbuchstaben übernommen.
 - Kein Match → Signalname wird unverändert übernommen.
 
-| Eingangsname | Normalisierter `knotenname` |
-|---|---|
-| `W 1` | `1` |
-| `EW 135` | `135` |
-| `DKW 3 A` | `3A` |
-| `DKW 3 a/b` | `3A/B` |
-| `DKW 3 c/d` | `3C/D` |
+Das Normalisieren ist standardmäßig aktiv und kann im Import-Dialog
+(Registerkarte **🔧 Elemente**, Checkbox **Namen von Weichenknoten normalisieren**) oder
+im CLI per `--no-normalize-switches` deaktiviert werden.
+
+| Eingangsname | Normalisierter `knotenname` | Anmerkung |
+|---|---|---|
+| `W 1` | `1` | |
+| `EW 135` | `135` | |
+| `DKW 3 A` | `3A` | |
+| `DKW 3 a/b` | `3A/B` | |
+| `DKW 3 c/d` | `3C/D` | |
+| `44W1` | `1` | ESTW: Bereichskennziffer wird ignoriert |
+| `44EW135` | `135` | ESTW: Bereichskennziffer wird ignoriert |
+| `44DKW3A` | `3A` | ESTW: Bereichskennziffer wird ignoriert |
 
 Modulgrenz- und Gleisende-Knoten werden **nicht** normalisiert; dort wird der Signalname
 direkt übernommen (in der Praxis tragen diese Knotentypen selten ein Signal vom Typ 2).
@@ -375,8 +384,8 @@ Die Weiterverarbeitung der Feature-Dicts ist aufruferabhängig:
 
 | Kontext | Ausgabe |
 |---|---|
-| QGIS-Plugin (`modules/import/import_external.py`) | Zwei `memory`-Layer; Layer-Namen `<stem> – Gleiskante` / `<stem> – Gleisknoten` |
-| Standalone-CLI (`core/cli.py`) | GeoPackage mit Layern `Gleiskante` / `Gleisknoten` (via `geopandas`/`shapely`) |
+| Python-Bibliothek | Zwei `memory`-Layer; Layer-Namen `<stem> – Gleiskante` / `<stem> – Gleisknoten` |
+| CLI (`core/cli.py`) | GeoPackage mit Layern `Gleiskante` / `Gleisknoten` (via `geopandas`/`shapely`) |
 
 ---
 
@@ -539,20 +548,19 @@ relevant; alle anderen Bits beeinflussen Rendering und Fahrwegsicherung, nicht d
 ## Paket-Struktur
 
 ```
-modules/external/st3_converter/
+st3-Import/
   ├─ st3_converter.py        # Klasse st3Converter (Konvertierungslogik, 8 Schritte)
-  ├─ __init__.py             # sys.path-Erweiterung für relative Importe
   ├─ config/
   │    └─ st3_converter_config.json   # Persistente Einstellungen
   └─ core/
-       ├─ core.py            # VERSION, IN_QGIS, Logging, Config-Klasse, print()-Wrapper
-       └─ cli.py             # Standalone-CLI (interaktiver Modus + argparse)
+       ├─ core.py            # VERSION, Logging, Config-Klasse, print()-Wrapper
+       ├─ cli.py             # CLI (interaktiver Modus + argparse)
 ```
 
 ### `st3Converter` (`st3_converter.py`)
 
-Hauptklasse; wird von QGIS-Plugin (`import_external.py`) und CLI (`core/cli.py`)
-gleichermaßen genutzt. Keine Abhängigkeit von QGIS zur Laufzeit. Konstruktor:
+Hauptklasse; Kann als Bibliothek oder von CLI (`core/cli.py`)
+gleichermaßen genutzt werden. Konstruktor:
 
 ```python
 st3Converter(
@@ -576,12 +584,13 @@ Verwaltet die persistenten Einstellungen; lädt/speichert
 | `auto_detect_crs` | `true` | Quell-KBS aus `<UTM UTM_Zone>` lesen |
 | `fallback_epsg` | `32632` | Rückfall-KBS wenn Auto-Erkennung fehlschlägt |
 | `target_epsg` | `31467` | Ziel-KBS der Ausgabe-Geometrien |
+| `normalize_switch_names` | `true` | Namen von Weichenknoten normalisieren (W/EW/DKW-Präfix und ESTW-Bereichskennziffer entfernen) |
 | `create_log_file` | `true` | `.log`-Datei neben Eingabedatei anlegen |
 | `open_log_file` | `false` | Protokoll nach Abschluss öffnen |
 
 ### `cli.py` (`core/cli.py`)
 
-Standalone-Einstiegspunkt ohne QGIS. Zwei Modi:
+Standard-Einstiegspunkt mit zwei Modi:
 
 - **Interaktiver Modus** (`python core/cli.py`): menügesteuerter Dialog mit dreistufiger
   Dateisuche (Arbeitsverzeichnis → Ordnerpfad → direkter Pfad) und Einstellungsmenü.
@@ -738,7 +747,7 @@ Attribute weg, wenn ihr Wert dem Standardwert entspricht.
 
 | `typ` | Herkunft | `knotenname` |
 |---|---|---|
-| `Weiche` | Vertex-Grad ≥ 3 | normalisierter Signalname (→ Normalisierung s. o.); ohne Signal: `<dateistem>_<nr>X` (auto) |
+| `Weiche` | Vertex-Grad ≥ 3 | normalisierter Signalname (→ Normalisieren s. o.); ohne Signal: `<dateistem>_<nr>X` (auto) |
 | `Modulgrenze` | `NachNormModul` oder `NachGegenModul` im StrElement | `<dateistem>_<nr>G` (auto) |
 | `Gleisende` | Freistehender Endpunkt ohne anderen Knotentyp | `<dateistem>_<nr>E` (auto) |
 

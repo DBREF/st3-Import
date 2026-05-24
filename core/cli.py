@@ -7,14 +7,20 @@ import sys
 import traceback
 from pathlib import Path
 
+# Eigenes Verzeichnis (core/) aus sys.path entfernen, damit 'core' nicht als
+# einzelnes Modul aufgelöst wird, sondern als Paket im Elternverzeichnis.
+_this_dir = str(Path(__file__).resolve().parent)
+_parent = str(Path(__file__).resolve().parent.parent)
+sys.path = [p for p in sys.path if p != _this_dir]
+if _parent not in sys.path:
+    sys.path.insert(0, _parent)
+
 # --- Drittanbieter-Bibliotheken ---
-import geopandas as gpd
+import geopandas as gpd  # noqa: E402
+from shapely.geometry import LineString, Point  # noqa: E402
 
 # --- Module ---
-from core.core import IN_QGIS, VERSION, Config, logger, print  # noqa: A004, F401
-
-# --- Drittanbieter-Bibliotheken ---
-from shapely.geometry import LineString, Point
+from core.core import VERSION, Config, print  # noqa: A004, F401, E402
 
 
 # EPSG-Auswahl
@@ -105,14 +111,22 @@ def settings_menu(config: Config) -> Config:
         print(f"   Aktuell: EPSG:{config.get('target_epsg', 31467)}")
         print("   (KBS der erstellten Ausgabe-Layer)")
 
-        print("\n4. Protokoll-Datei erstellen")
+        print("\n4. Namen von Weichenknoten normalisieren")
+        print(
+            f"   Aktuell: {'Ja' if config.get('normalize_switch_names', True) else 'Nein'}"
+        )
+        print(
+            "   (Entfernt W/EW/DKW-Präfixe und ESTW-Bereichskennziffern aus Signalnamen)"
+        )
+
+        print("\n5. Protokoll-Datei erstellen")
         print(f"   Aktuell: {'Ja' if config.get('create_log_file', True) else 'Nein'}")
 
-        print("\n5. Protokoll nach Abschluss öffnen")
+        print("\n6. Protokoll nach Abschluss öffnen")
         open_log = config.get("open_log_file", False)
         print(f"   Aktuell: {'Ja' if open_log else 'Nein'}")
 
-        print("\n6. Einstellungen speichern")
+        print("\n7. Einstellungen speichern")
         print("\n0. Zurück zum Hauptmenü")
 
         choice = input("\nAuswahl [0]: ").strip()
@@ -128,16 +142,22 @@ def settings_menu(config: Config) -> Config:
             epsg_code = select_epsg()
             config.set("target_epsg", epsg_code)
         elif choice == "4":
+            new_value = not config.get("normalize_switch_names", True)
+            config.set("normalize_switch_names", new_value)
+            print(
+                f"  ✓ Namen von Weichenknoten normalisieren: {'Ja' if new_value else 'Nein'}"
+            )
+        elif choice == "5":
             new_value = not config.get("create_log_file", True)
             config.set("create_log_file", new_value)
             print(f"  ✓ Protokoll-Datei erstellen: {'Ja' if new_value else 'Nein'}")
-        elif choice == "5":
+        elif choice == "6":
             new_value = not config.get("open_log_file", False)
             config.set("open_log_file", new_value)
             print(
                 f"  ✓ Protokoll nach Abschluss öffnen: {'Ja' if new_value else 'Nein'}"
             )
-        elif choice == "6":
+        elif choice == "7":
             config.save()
         elif choice == "0" or not choice:
             break
@@ -220,6 +240,9 @@ def _ask_output_and_confirm(input_file: Path, config: dict) -> tuple | None:
     print(f"  Ziel-KBS:     EPSG:{config.get('target_epsg', 31467)}")
     print(f"  Auto-CRS:     {'Ja' if config.get('auto_detect_crs', True) else 'Nein'}")
     print(f"  Rückfall-KBS: EPSG:{config.get('fallback_epsg', 32632)}")
+    print(
+        f"  WK normalisieren: {'Ja' if config.get('normalize_switch_names', True) else 'Nein'}"
+    )
     print("=" * 70)
 
     confirm = input("\nKonvertierung starten? (j/n) [j]: ").strip().lower()
@@ -402,6 +425,11 @@ Beispielaufrufe:
         help="Rückfall-EPSG-Code wenn Auto-Erkennung fehlschlägt (Standard: 32632)",
     )
     parser.add_argument(
+        "--no-normalize-switches",
+        action="store_true",
+        help="Normalisieren von Weichenknoten deaktivieren (Signalnamen unverändert übernehmen)",
+    )
+    parser.add_argument(
         "--open-log",
         action="store_true",
         help="Protokoll nach Abschluss automatisch öffnen",
@@ -437,6 +465,7 @@ Beispielaufrufe:
             if args.fallback_epsg is not None
             else _cfg.get("fallback_epsg", 32632),
             "target_epsg": args.epsg,
+            "normalize_switch_names": not args.no_normalize_switches,
             "open_log_file": args.open_log,
         }
 
@@ -445,6 +474,7 @@ Beispielaufrufe:
                 str(input_file),
                 target_epsg=config["target_epsg"],
                 auto_detect_crs=config["auto_detect_crs"],
+                normalize_switch_names=config.get("normalize_switch_names", True),
             )
             nodes_features, edges_features = converter.convert()
             _write_gpkg(
@@ -479,6 +509,7 @@ Beispielaufrufe:
                     str(input_file),
                     target_epsg=config["target_epsg"],
                     auto_detect_crs=config.get("auto_detect_crs", True),
+                    normalize_switch_names=config.get("normalize_switch_names", True),
                 )
                 nodes_features, edges_features = converter.convert()
                 _write_gpkg(

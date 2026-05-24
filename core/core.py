@@ -10,37 +10,14 @@ from pathlib import Path
 # --- Version ---
 VERSION = "1.0.0"
 
-# --- QGIS-Erkennung ---
-IN_QGIS = "qgis.core" in sys.modules
-
-# --- Logging-System ---
+# --- Logging ---
 logger = logging.getLogger("st3_converter")
 logger.setLevel(logging.DEBUG)
 logger.propagate = False  # Nicht an Root-Logger weitergeben
 
 
-class _QgsMessageLogHandler(logging.Handler):
-    """Leitet Logging-Nachrichten an QgsMessageLog weiter (nur in QGIS)."""
-
-    def emit(self, record: logging.LogRecord) -> None:
-        try:
-            from qgis.core import Qgis, QgsMessageLog
-
-            level_map = {
-                logging.WARNING: Qgis.MessageLevel.Warning,
-                logging.ERROR: Qgis.MessageLevel.Critical,
-                logging.CRITICAL: Qgis.MessageLevel.Critical,
-            }
-            qgis_level = level_map.get(record.levelno, Qgis.MessageLevel.Info)
-            QgsMessageLog.logMessage(
-                self.format(record), "st3-Import", level=qgis_level
-            )
-        except Exception:  # noqa: BLE001
-            pass
-
-
 def _setup_logging() -> None:
-    """Konfiguriert das Logging für CLI (stdout) und QGIS (QgsMessageLog)."""
+    """Konfiguriert das Logging."""
     if logger.handlers:
         return
 
@@ -57,21 +34,13 @@ def _setup_logging() -> None:
     stream_handler.setLevel(logging.DEBUG)
     logger.addHandler(stream_handler)
 
-    if IN_QGIS:
-        qgis_handler = _QgsMessageLogHandler()
-        qgis_handler.setFormatter(formatter)
-        qgis_handler.setLevel(logging.DEBUG)
-        logger.addHandler(qgis_handler)
-
 
 _setup_logging()
 
 
 def print(*args, **kwargs) -> None:  # noqa: A001
     """Modul-weiter print()-Wrapper: routet alle Ausgaben durch das Logging-System.
-
-    In CLI:  identisches Verhalten wie builtin print() via StreamHandler → stdout.
-    In QGIS: zusätzliche Ausgabe in QgsMessageLog mit korrektem Level.
+    Identisches Verhalten wie builtin print() via StreamHandler → stdout.
     """
     file = kwargs.get("file", None)
     msg = " ".join(str(a) for a in args) if args else ""
@@ -119,6 +88,7 @@ class Config:
             "auto_detect_crs": True,
             "fallback_epsg": 32632,
             "target_epsg": 31467,
+            "normalize_switch_names": True,
             "create_log_file": True,
             "open_log_file": False,
         }
