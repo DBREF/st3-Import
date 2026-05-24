@@ -38,7 +38,7 @@ Die erzeugten Layer sind QGIS-Memory-Layer und müssen manuell in ein GeoPackage
     GeoJSON/              # Exportierte GeoJSON-Dateien
     GeoPackage/           # Exportierte GeoPackage-Dateien
     KML/                  # Exportierte KML-Dateien
-  st3_converter.py        # Hauptklasse ST32QGISConverter
+  st3_converter.py        # Hauptklasse st3Converter
 ```
 
 **Abhängigkeiten:** `lxml`, `pyproj`
@@ -48,9 +48,9 @@ Die erzeugten Layer sind QGIS-Memory-Layer und müssen manuell in ein GeoPackage
 **Verwendung (Standalone):**
 
 ```python
-from st3_converter import ST32QGISConverter
+from st3_converter import st3Converter
 
-converter = ST32QGISConverter(
+converter = st3Converter(
     input_path="Strecke.st3",
     target_epsg=31467,       # Ziel-KBS: DHDN/GK Zone 3
     auto_detect_crs=True,    # UTM-Zone automatisch aus Datei lesen

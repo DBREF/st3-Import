@@ -1,5 +1,9 @@
 # st3 – Technische Dokumentation
 
+**Version:** 1.0.0 
+**Autor:** Fabian Schöpflin  
+**Datum:** 24. Mai 2026
+
 ## Übersicht
 
 Dieses Dokument beschreibt das **Zusi-3-Streckendateiformat** (`.st3`) und das daraus
@@ -354,12 +358,25 @@ DHDN/Gauß-Krüger Zone 3).
 
 ### Schritt 8 – Layer-Ausgabe
 
-Aus den Ketten und Breakpoints werden zwei QGIS-Memory-Layer erzeugt:
+`st3Converter.convert()` gibt zwei Listen von Feature-Dicts zurück:
 
-- **Gleiskante-Layer** (`LineString`): ein Feature pro Gleiskette, QGIS-Layer-Name `<stem> – Gleiskante`,
+```python
+nodes_features, edges_features = converter.convert()
+# nodes_features: [{"geometry": (x, y), "attrs": {...}}, …]
+# edges_features: [{"geometry": [(x1,y1),(x2,y2),…], "attrs": {...}}, …]
+```
+
+- **`edges_features`**: ein Eintrag pro Gleiskante; `geometry` ist eine Liste von `(x, y)`-Tupeln;
   Attribute gemäß [Zielattribute – Kanten-Layer](#kanten-layer-linestring)
-- **Gleisknoten-Layer** (`Point`): ein Feature pro Breakpoint-Vertex, QGIS-Layer-Name `<stem> – Gleisknoten`,
+- **`nodes_features`**: ein Eintrag pro Gleisknoten; `geometry` ist ein `(x, y)`-Tupel;
   Attribute gemäß [Zielattribute – Knoten-Layer](#knoten-layer-point)
+
+Die Weiterverarbeitung der Feature-Dicts ist aufruferabhängig:
+
+| Kontext | Ausgabe |
+|---|---|
+| QGIS-Plugin (`modules/import/import_external.py`) | Zwei `memory`-Layer; Layer-Namen `<stem> – Gleiskante` / `<stem> – Gleisknoten` |
+| Standalone-CLI (`core/cli.py`) | GeoPackage mit Layern `Gleiskante` / `Gleisknoten` (via `geopandas`/`shapely`) |
 
 ---
 
@@ -516,6 +533,62 @@ relevant; alle anderen Bits beeinflussen Rendering und Fahrwegsicherung, nicht d
 |  50 |  – |  x |  – |  –  |  x  |  x |
 |  51 |  x |  x |  – |  –  |  x  |  x |
 |  52 |  – |  – |  x |  –  |  x  |  x |
+
+---
+
+## Paket-Struktur
+
+```
+modules/external/st3_converter/
+  ├─ st3_converter.py        # Klasse st3Converter (Konvertierungslogik, 8 Schritte)
+  ├─ __init__.py             # sys.path-Erweiterung für relative Importe
+  ├─ config/
+  │    └─ st3_converter_config.json   # Persistente Einstellungen
+  └─ core/
+       ├─ core.py            # VERSION, IN_QGIS, Logging, Config-Klasse, print()-Wrapper
+       └─ cli.py             # Standalone-CLI (interaktiver Modus + argparse)
+```
+
+### `st3Converter` (`st3_converter.py`)
+
+Hauptklasse; wird von QGIS-Plugin (`import_external.py`) und CLI (`core/cli.py`)
+gleichermaßen genutzt. Keine Abhängigkeit von QGIS zur Laufzeit. Konstruktor:
+
+```python
+st3Converter(
+    input_path,        # Pfad zur .st3-Datei
+    target_epsg=31467, # Ziel-KBS
+    auto_detect_crs=True,
+    progress_callback=None
+)
+```
+
+Rückgabe von `convert()`: `(nodes_features, edges_features)` — Listen von Feature-Dicts
+(siehe [Schritt 8](#schritt-8--layer-ausgabe)).
+
+### `Config` (`core/core.py`)
+
+Verwaltet die persistenten Einstellungen; lädt/speichert
+`config/st3_converter_config.json`. Schlüssel und Defaults:
+
+| Schlüssel | Default | Beschreibung |
+|---|---|---|
+| `auto_detect_crs` | `true` | Quell-KBS aus `<UTM UTM_Zone>` lesen |
+| `fallback_epsg` | `32632` | Rückfall-KBS wenn Auto-Erkennung fehlschlägt |
+| `target_epsg` | `31467` | Ziel-KBS der Ausgabe-Geometrien |
+| `create_log_file` | `true` | `.log`-Datei neben Eingabedatei anlegen |
+| `open_log_file` | `false` | Protokoll nach Abschluss öffnen |
+
+### `cli.py` (`core/cli.py`)
+
+Standalone-Einstiegspunkt ohne QGIS. Zwei Modi:
+
+- **Interaktiver Modus** (`python core/cli.py`): menügesteuerter Dialog mit dreistufiger
+  Dateisuche (Arbeitsverzeichnis → Ordnerpfad → direkter Pfad) und Einstellungsmenü.
+- **CLI-Modus** (`python core/cli.py -i ... -o ...`): Argparse-basiert; alle
+  Konvertierungsoptionen über Schalter steuerbar.
+
+Ausgabe ist stets ein GeoPackage (via `geopandas`/`shapely`).
 |  53 |  x |  – |  x |  –  |  x  |  x |
 |  54 |  – |  x |  x |  –  |  x  |  x |
 |  55 |  x |  x |  x |  –  |  x  |  x |

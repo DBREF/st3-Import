@@ -1,5 +1,9 @@
 # st3-Importer – Bedienung und Konfiguration
 
+**Version:** 1.0.0 
+**Autor:** Fabian Schöpflin  
+**Datum:** 24. Mai 2026
+
 ## Übersicht
 
 Der st3-Importer überführt Zusi-3-Streckendateien (`.st3`) in QGIS-Memory-Layer.
@@ -14,7 +18,7 @@ Pro importierter Datei entstehen zwei Layer:
 (z. B. `Freudenstein_2025`).
 
 Die eigentliche Konvertierungslogik liegt im Paket
-`modules/external/st3_converter/` (Klasse `ST32QGISConverter`).
+`modules/external/st3_converter/` (Klasse `st3Converter`).
 Das vorliegende Dokument beschreibt ausschließlich die Bedienoberfläche und
 die Konfigurationsoptionen des Importers.
 
@@ -28,12 +32,81 @@ die Konfigurationsoptionen des Importers.
 | Komponente | Beschreibung |
 |---|---|
 | `modules/external/st3_converter/st3_converter.py` | Konverter-Modul; wird beim Öffnen des Dialogs automatisch geprüft |
-| `lxml` | Python-Bibliothek für XML-Parsing (muss in der QGIS-Python-Umgebung verfügbar sein) |
+| `modules/external/st3_converter/core/core.py` | Logging-Setup und `Config`-Klasse; lädt `config/st3_converter_config.json` |
+| `modules/external/st3_converter/config/st3_converter_config.json` | Persistente Standardeinstellungen (wird beim ersten Start automatisch angelegt, falls nicht vorhanden) |
+| `lxml` | Python-Bibliothek für XML-Parsing (muss in der Python-Umgebung verfügbar sein) |
 | `pyproj` | Koordinatentransformation; erwartet die PROJ-Datendateien |
+| `geopandas`, `shapely` | Nur Standalone-CLI: GeoPackage-Ausgabe (`python core/cli.py`) |
 | PROJ-Daten (`de_adv_BETA2007.tif`) | Optional; wird aus `C:\OSGeo4W\share\proj` geladen, sofern vorhanden, für genaue DHDN↔WGS84-Transformation |
 
 Ist der Konverter nicht verfügbar, erscheint beim Öffnen des Dialogs eine
 Warnmeldung. Der Import-Menüeintrag bleibt sichtbar.
+
+---
+
+## Standalone-CLI (ohne QGIS)
+
+Der st3-Konverter kann unabhängig von QGIS als Kommandozeilenprogramm genutzt werden.
+Das Einstiegsskript ist `modules/external/st3_converter/core/cli.py`.
+
+### Konfigurationsdatei
+
+Alle Einstellungen werden dauerhaft in
+`modules/external/st3_converter/config/st3_converter_config.json` gespeichert:
+
+```json
+{
+    "auto_detect_crs": true,
+    "fallback_epsg": 32632,
+    "target_epsg": 31467,
+    "create_log_file": true,
+    "open_log_file": false
+}
+```
+
+Im interaktiven Modus können die Einstellungen über **Option 6 → Einstellungen speichern**
+in diese Datei geschrieben werden.
+
+### Interaktiver Modus
+
+```
+python core/cli.py
+```
+
+Führt einen menügesteuerten Eingabedialog (Eingabedatei, Ziel-KBS, Optionen). Die
+Dateisuche läuft dreistufig: zunächst im Arbeitsverzeichnis, dann nach manuellem
+Ordnerpfad, schließlich nach direkter Pfadangabe.
+
+Im Einstellungsmenü (Option S) stehen folgende Optionen zur Verfügung:
+
+| Option | Beschreibung |
+|---|---|
+| 1 | Quell-KBS automatisch erkennen (ein/aus) |
+| 2 | Rückfall-KBS festlegen |
+| 3 | Ziel-KBS festlegen |
+| 4 | Protokoll erstellen (ein/aus) |
+| 5 | Protokoll nach Abschluss öffnen (ein/aus) |
+| 6 | Einstellungen in JSON-Datei speichern |
+| 0 | Zurück |
+
+### CLI-Modus
+
+```
+python core/cli.py -i <Eingabe.st3> -o <Ausgabe.gpkg> [Optionen]
+```
+
+| Argument | Beschreibung |
+|---|---|
+| `-i / --input DATEI` | Pfad zur `.st3`-Eingabedatei (Pflicht im CLI-Modus) |
+| `-o / --output DATEI` | Pfad zur Ausgabe-GeoPackage-Datei (Pflicht im CLI-Modus) |
+| `-e / --epsg CODE` | Ziel-KBS als EPSG-Code (Standard: 31467) |
+| `--no-auto-detect` | Automatische CRS-Erkennung deaktivieren |
+| `--fallback-epsg CODE` | Rückfall-KBS wenn Auto-Erkennung fehlschlägt (Standard: aus JSON-Config) |
+| `--open-log` | Protokoll nach Abschluss automatisch öffnen |
+| `-v / --version` | Versionsnummer ausgeben |
+
+Die Ausgabe ist ein GeoPackage mit zwei Layern: `Gleiskante` (LineString) und
+`Gleisknoten` (Point), im gewählten Ziel-KBS.
 
 ---
 
@@ -249,12 +322,12 @@ success, log_path = import_batch_from_st3(
 ### Direktaufruf des Konverters
 
 Für vollständige Unabhängigkeit von QGIS und dem Importer-Layer kann
-`ST32QGISConverter` direkt verwendet werden:
+`st3Converter` direkt verwendet werden:
 
 ```python
-from modules.external.st3_converter.st3_converter import ST32QGISConverter
+from modules.external.st3_converter.st3_converter import st3Converter
 
-converter = ST32QGISConverter(
+converter = st3Converter(
     input_path=r"C:\...\Freudenstein_2025.st3",
     target_epsg=31467,
     auto_detect_crs=True,

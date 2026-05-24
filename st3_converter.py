@@ -1,4 +1,4 @@
-# st3_converter: st3_converter.py
+# st3-Import: st3_converter.py
 # Copyright (c) 2026 Fabian Schöpflin. Alle Rechte vorbehalten.
 
 # --- Standardbibliotheken ---
@@ -17,10 +17,12 @@ if _osgeo4w_proj.is_dir() and (_osgeo4w_proj / "de_adv_BETA2007.tif").exists():
             ";" + _proj_data if _proj_data else ""
         )
 
+# --- Module ---
+from core.core import VERSION, logger  # noqa: F401, E402
+
 # --- Drittanbieter-Bibliotheken ---
-from core.core import VERSION, logger  # noqa: F401
-from lxml import etree as ET
-from pyproj import Transformer
+from lxml import etree as ET  # noqa: E402
+from pyproj import Transformer  # noqa: E402
 
 # Hilfsfunktionen
 
@@ -64,7 +66,7 @@ class _UnionFind:
 # Hauptklasse
 
 
-class ST32QGISConverter:
+class st3Converter:
     """Konvertiert eine Zusi-3-Streckendatei (.st3) in ein Knoten-Kanten-Modell.
 
     Rückgabe von convert():
