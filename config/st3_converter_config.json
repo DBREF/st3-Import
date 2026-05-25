@@ -2,6 +2,8 @@
     "auto_detect_crs": true,
     "fallback_epsg": 32632,
     "target_epsg": 31467,
+    "normalize_switch_names": true,
+    "import_envelope": true,
     "create_log_file": true,
     "open_log_file": false
 }

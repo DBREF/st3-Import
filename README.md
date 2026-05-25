@@ -31,28 +31,24 @@ Die Ausgabe erfolgt als GeoPackage (`.gpkg`) neben der Eingabedatei oder an eine
 
 ```
 st3-Import/
-├── st3_converter.py            # Hauptklasse st3Converter (Konvertierungslogik)
-├── requirements.txt            # Python-Abhängigkeiten
+├── st3_converter.py                # Hauptklasse st3Converter (Konvertierungslogik)
+├── requirements.txt                # Python-Abhängigkeiten
 ├── config/
-│   └── st3_converter_config.json  # Persistente Einstellungen
+│   └── st3_converter_config.json   # Persistente Einstellungen
 ├── convert/
-│   ├── __init__.py             # Paket-Init
-│   └── convert_envelope.py     # Hüllkurven-Import aus <Huellkurve>-Element
+│   ├── __init__.py                 # Paket-Init
+│   └── convert_envelope.py         # Hüllkurven-Import aus <Huellkurve>-Element
 ├── core/
-│   ├── cli.py                  # CLI-Einstiegspunkt, interaktiver Modus, GeoPackage-Export
-│   └── core.py                 # Logging-System, Versionskonstante, Config-Klasse
-├── docs/
-│   ├── st3-Import.md           # Bedienungsanleitung und Konfigurationsreferenz
-│   └── st3-Import (Technisch).md  # Algorithmus, Datenformat, Zielmodell
-└── files/
-    ├── GeoJSON/                # Exportierte GeoJSON-Dateien
-    ├── GeoPackage/             # Exportierte GeoPackage-Dateien
-    └── KML/                    # Exportierte KML-Dateien
+│   ├── cli.py                      # CLI-Einstiegspunkt, interaktiver Modus, GeoPackage-Export
+│   └── core.py                     # Logging-System, Versionskonstante, Config-Klasse
+└── docs/
+    ├── st3-Import.md               # Bedienungsanleitung und Konfigurationsreferenz
+    └── st3-Import (Technisch).md   # Algorithmus, Datenformat, Zielmodell
 ```
 
 **Abhängigkeiten:** `geopandas`, `lxml`, `pyproj`, `shapely`
 
-**Dokumentation:** [st3-Import.md](docs/st3-Import.md) · [st3-Import (Technisch).md](docs/st3-Import%20(Technisch).md)
+**Dokumentation:** [st3-Import.md](docs/st3-Import%20(Handbuch).md) · [st3-Import (Technisch).md](docs/st3-Import%20(Technische Dokumentation).md)
 
 ---
 
@@ -125,6 +121,8 @@ nodes_features, edges_features = converter.convert()
 ---
 
 ## Lizenz
+
+siehe LICENSE (MIT)
 
 Copyright © 2026 Fabian Schöpflin. Alle Rechte vorbehalten.  
 Autor: Fabian Schöpflin  

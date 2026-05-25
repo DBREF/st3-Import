@@ -1,4 +1,4 @@
-# st3 – Technische Dokumentation
+# st3-Import – Technische Dokumentation
 
 **Version:** 1.0.0 
 **Autor:** Fabian Schöpflin  

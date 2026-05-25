@@ -1,4 +1,4 @@
-# st3-Importer – Nutzung und Konfiguration
+# st3-Importer – Handbuch
 
 **Version:** 1.0.0 
 **Autor:** Fabian Schöpflin  
@@ -25,7 +25,7 @@ Knoten-Kanten-Modell. Pro verarbeiteter Datei entstehen zwei Layer:
 > Das Normalisieren lässt sich per `--no-normalize-switches` (CLI) oder per
 > `normalize_switch_names=False` (Python-API) deaktivieren, um Signalnamen
 > unverändert zu übernehmen.
-> Details siehe [st3-Import (Technisch).md](st3-Import%20(Technisch).md#namen-von-weichenknoten-normalisieren).
+> Details siehe [st3-Import (Technische Dokumentation).md](st3-Import%20(Technische Dokumentation).md#namen-von-weichenknoten-normalisieren).
 
 > **Betriebsstelle bei Weichen:** Trägt ein Weichensignal (SignalTyp 2) das Attribut
 > `NameBetriebsstelle` (z. B. `Bickenbach`), wird dieser Wert im Knoten-Layer als `bst_name`
@@ -39,7 +39,7 @@ Knoten-Kanten-Modell. Pro verarbeiteter Datei entstehen zwei Layer:
 - **Python-Bibliothek**: Direkte Einbindung in eigene Python-Skripte
 
 > **Technische Hintergründe** zu Algorithmus, Datenformat und Zielmodell
-> sind in [st3-Import (Technisch).md](st3-Import%20(Technisch).md) dokumentiert.
+> sind in [st3-Import (Technische Dokumentation).md](st3-Import%20(Technische Dokumentation).md) dokumentiert.
 
 ---
 
@@ -159,7 +159,7 @@ Rückgabe von `convert()`:
 | `nodes_features` | `list[dict]` | Gleisknoten; `geometry` = `(x, y)`-Tupel, `attrs` = Attribut-Dict |
 | `edges_features` | `list[dict]` | Gleiskanten; `geometry` = Liste von `(x, y)`-Tupeln, `attrs` = Attribut-Dict |
 
-Die Attributfelder entsprechen den in [st3-Import (Technisch).md → Zielattribute](st3-Import%20(Technisch).md#zielattribute)
+Die Attributfelder entsprechen den in [st3-Import (Technische Dokumentation).md → Zielattribute](st3-Import%20(Technische Dokumentation).md#zielattribute)
 beschriebenen Feldern.
 
 ### Direktaufruf der Hüllkurven-Konvertierung
