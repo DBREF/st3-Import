@@ -1,8 +1,8 @@
-# st3-Import – Technische Dokumentation
+# st3-Import: Technische Dokumentation
 
 **Version:** 1.0.0 
 **Autor:** Fabian Schöpflin  
-**Datum:** 24. Mai 2026
+**Datum:** 25. Mai 2026
 
 ## Übersicht
 

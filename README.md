@@ -31,24 +31,23 @@ Die Ausgabe erfolgt als GeoPackage (`.gpkg`) neben der Eingabedatei oder an eine
 
 ```
 st3-Import/
-├── st3_converter.py                # Hauptklasse st3Converter (Konvertierungslogik)
-├── requirements.txt                # Python-Abhängigkeiten
+├── st3_converter.py                                # Hauptklasse st3Converter (Konvertierungslogik)
+├── requirements.txt                                # Python-Abhängigkeiten
 ├── config/
-│   └── st3_converter_config.json   # Persistente Einstellungen
+│   └── st3_converter_config.json                   # Persistente Einstellungen
 ├── convert/
-│   ├── __init__.py                 # Paket-Init
-│   └── convert_envelope.py         # Hüllkurven-Import aus <Huellkurve>-Element
+│   └── convert_envelope.py                         # Hüllkurven-Import aus <Huellkurve>-Element
 ├── core/
-│   ├── cli.py                      # CLI-Einstiegspunkt, interaktiver Modus, GeoPackage-Export
-│   └── core.py                     # Logging-System, Versionskonstante, Config-Klasse
+│   ├── cli.py                                      # CLI-Einstiegspunkt, interaktiver Modus, GeoPackage-Export
+│   └── core.py                                     # Logging-System, Versionskonstante, Config-Klasse
 └── docs/
-    ├── st3-Import.md               # Bedienungsanleitung und Konfigurationsreferenz
-    └── st3-Import (Technisch).md   # Algorithmus, Datenformat, Zielmodell
+    ├── st3-Import (Handbuch).md                    # Bedienungsanleitung und Konfigurationsreferenz
+    └── st3-Import (Technische Dokumentation).md    # Algorithmus, Datenformat, Zielmodell
 ```
 
 **Abhängigkeiten:** `geopandas`, `lxml`, `pyproj`, `shapely`
 
-**Dokumentation:** [st3-Import.md](docs/st3-Import%20(Handbuch).md) · [st3-Import (Technisch).md](docs/st3-Import%20(Technische Dokumentation).md)
+**Dokumentation:** [st3-Import (Handbuch).md](docs/st3-Import%20%28Handbuch%29.md) · [st3-Import (Technische Dokumentation).md](docs/st3-Import%20%28Technische%20Dokumentation%29.md)
 
 ---
 
