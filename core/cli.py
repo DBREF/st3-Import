@@ -17,10 +17,10 @@ if _parent not in sys.path:
 
 # --- Drittanbieter-Bibliotheken ---
 import geopandas as gpd  # noqa: E402
-from shapely.geometry import LineString, Point  # noqa: E402
+from shapely.geometry import LineString, Point, Polygon  # noqa: E402
 
 # --- Module ---
-from core.core import VERSION, Config, print  # noqa: A004, F401, E402
+from core.core import VERSION, Config, print  # noqa: E402
 
 
 # EPSG-Auswahl
@@ -126,7 +126,11 @@ def settings_menu(config: Config) -> Config:
         open_log = config.get("open_log_file", False)
         print(f"   Aktuell: {'Ja' if open_log else 'Nein'}")
 
-        print("\n7. Einstellungen speichern")
+        print("\n7. Hüllkurve importieren")
+        print(f"   Aktuell: {'Ja' if config.get('import_envelope', True) else 'Nein'}")
+        print("   (Liest das <Huellkurve>-Polygon als Layer in das GeoPackage)")
+
+        print("\n8. Einstellungen speichern")
         print("\n0. Zurück zum Hauptmenü")
 
         choice = input("\nAuswahl [0]: ").strip()
@@ -158,6 +162,10 @@ def settings_menu(config: Config) -> Config:
                 f"  ✓ Protokoll nach Abschluss öffnen: {'Ja' if new_value else 'Nein'}"
             )
         elif choice == "7":
+            new_value = not config.get("import_envelope", True)
+            config.set("import_envelope", new_value)
+            print(f"  ✓ Hüllkurve importieren: {'Ja' if new_value else 'Nein'}")
+        elif choice == "8":
             config.save()
         elif choice == "0" or not choice:
             break
@@ -185,14 +193,16 @@ def _write_gpkg(
     edges_features: list,
     output_path: str,
     target_epsg: int,
+    envelope_features: list | None = None,
 ) -> None:
-    """Schreibt Knoten- und Kanten-Features in ein GeoPackage.
+    """Schreibt Knoten- und Kanten-Features (sowie optional Hüllkurven) in ein GeoPackage.
 
     Args:
-        nodes_features: Liste von Feature-Dicts (geometry: Punkt-Tupel, attrs: dict)
-        edges_features: Liste von Feature-Dicts (geometry: Koordinatenliste, attrs: dict)
-        output_path:    Pfad zur Ausgabe-GeoPackage-Datei
-        target_epsg:    EPSG-Code des Ziel-KBS
+        nodes_features:    Liste von Feature-Dicts (geometry: Punkt-Tupel, attrs: dict)
+        edges_features:    Liste von Feature-Dicts (geometry: Koordinatenliste, attrs: dict)
+        output_path:       Pfad zur Ausgabe-GeoPackage-Datei
+        target_epsg:       EPSG-Code des Ziel-KBS
+        envelope_features: Optional — Liste von Hüllkurven-Feature-Dicts
     """
     crs = f"EPSG:{target_epsg}"
 
@@ -215,6 +225,18 @@ def _write_gpkg(
 
     gdf_nodes.to_file(output_path, layer="Gleisknoten", driver="GPKG")
     gdf_edges.to_file(output_path, layer="Gleiskante", driver="GPKG", mode="a")
+
+    if envelope_features:
+        env_records = []
+        for feat in envelope_features:
+            record = dict(feat["attrs"])
+            pts = list(feat["geometry"])
+            if pts and pts[0] != pts[-1]:
+                pts = pts + [pts[0]]
+            record["geometry"] = Polygon(pts)
+            env_records.append(record)
+        gdf_env = gpd.GeoDataFrame(env_records, crs=crs)
+        gdf_env.to_file(output_path, layer="Hüllkurve", driver="GPKG", mode="a")
 
 
 # Hilfsfunktionen für interactive_mode
@@ -243,6 +265,7 @@ def _ask_output_and_confirm(input_file: Path, config: dict) -> tuple | None:
     print(
         f"  WK normalisieren: {'Ja' if config.get('normalize_switch_names', True) else 'Nein'}"
     )
+    print(f"  Hüllkurve:    {'Ja' if config.get('import_envelope', True) else 'Nein'}")
     print("=" * 70)
 
     confirm = input("\nKonvertierung starten? (j/n) [j]: ").strip().lower()
@@ -379,7 +402,8 @@ def interactive_mode() -> tuple | None:
 
 def main():
     """Hauptfunktion für das CLI."""
-    # Lazy import um zirkuläre Importe zu vermeiden
+    # Lazy imports um zirkuläre Importe zu vermeiden
+    from convert.convert_envelope import convert_envelope  # noqa: PLC0415
     from st3_converter import st3Converter  # noqa: PLC0415
 
     parser = argparse.ArgumentParser(
@@ -430,6 +454,17 @@ Beispielaufrufe:
         help="Normalisieren von Weichenknoten deaktivieren (Signalnamen unverändert übernehmen)",
     )
     parser.add_argument(
+        "--import-envelope",
+        action="store_true",
+        default=None,
+        help="Hüllkurven-Polygon aus der st3-Datei importieren und als Layer speichern",
+    )
+    parser.add_argument(
+        "--no-import-envelope",
+        action="store_true",
+        help="Hüllkurven-Import deaktivieren",
+    )
+    parser.add_argument(
         "--open-log",
         action="store_true",
         help="Protokoll nach Abschluss automatisch öffnen",
@@ -459,6 +494,13 @@ Beispielaufrufe:
             sys.exit(1)
 
         _cfg = Config()
+        import_envelope = (
+            False
+            if args.no_import_envelope
+            else True
+            if args.import_envelope
+            else _cfg.get("import_envelope", True)
+        )
         config = {
             "auto_detect_crs": not args.no_auto_detect,
             "fallback_epsg": args.fallback_epsg
@@ -466,6 +508,7 @@ Beispielaufrufe:
             else _cfg.get("fallback_epsg", 32632),
             "target_epsg": args.epsg,
             "normalize_switch_names": not args.no_normalize_switches,
+            "import_envelope": import_envelope,
             "open_log_file": args.open_log,
         }
 
@@ -477,14 +520,31 @@ Beispielaufrufe:
                 normalize_switch_names=config.get("normalize_switch_names", True),
             )
             nodes_features, edges_features = converter.convert()
+
+            envelope_features = None
+            if config.get("import_envelope", True):
+                envelope_features = convert_envelope(
+                    str(input_file),
+                    target_epsg=config["target_epsg"],
+                    auto_detect_crs=config["auto_detect_crs"],
+                    fallback_epsg=config.get("fallback_epsg", 32632),
+                )
+
             _write_gpkg(
-                nodes_features, edges_features, args.output, config["target_epsg"]
+                nodes_features,
+                edges_features,
+                args.output,
+                config["target_epsg"],
+                envelope_features=envelope_features or None,
             )
             for w in converter.warnings:
                 print(f"[WARNUNG] {w}")
+            env_info = (
+                f", {len(envelope_features)} Hüllkurve(n)" if envelope_features else ""
+            )
             print(
-                f"\n[OK] {len(nodes_features)} Knoten, {len(edges_features)} Kanten "
-                f"→ {args.output}"
+                f"\n[OK] {len(nodes_features)} Knoten, {len(edges_features)} Kanten"
+                f"{env_info} → {args.output}"
             )
         except KeyboardInterrupt:
             print("\n[INFO] Konvertierung abgebrochen.", file=sys.stderr)
@@ -512,19 +572,35 @@ Beispielaufrufe:
                     normalize_switch_names=config.get("normalize_switch_names", True),
                 )
                 nodes_features, edges_features = converter.convert()
+
+                envelope_features = None
+                if config.get("import_envelope", True):
+                    envelope_features = convert_envelope(
+                        str(input_file),
+                        target_epsg=config["target_epsg"],
+                        auto_detect_crs=config.get("auto_detect_crs", True),
+                        fallback_epsg=config.get("fallback_epsg", 32632),
+                    )
+
                 _write_gpkg(
                     nodes_features,
                     edges_features,
                     output_file,
                     config["target_epsg"],
+                    envelope_features=envelope_features or None,
                 )
                 for w in converter.warnings:
                     print(f"[WARNUNG] {w}")
+                env_info = (
+                    f", {len(envelope_features)} Hüllkurve(n)"
+                    if envelope_features
+                    else ""
+                )
                 print("\n" + "=" * 70)
                 print("Konvertierung abgeschlossen!")
                 print(
-                    f"  {len(nodes_features)} Knoten, {len(edges_features)} Kanten "
-                    f"→ {output_file}"
+                    f"  {len(nodes_features)} Knoten, {len(edges_features)} Kanten"
+                    f"{env_info} → {output_file}"
                 )
                 print("=" * 70)
                 input("\nDrücken Sie Enter, um zum Hauptmenü zurückzukehren...")

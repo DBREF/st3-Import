@@ -14,8 +14,11 @@ Informationen. Ziel ist es, diese in zwei Datensätze:
 
 | Layer | Geometrietyp | Inhalt |
 |---|---|---|
-| `<Name> – Gleiskante` | LineString | Gleisabschnitte zwischen Knoten |
-| `<Name> – Gleisknoten` | Point | Weichen, Modulgrenzen, Gleisenden |
+| `Gleiskante` | LineString | Gleisabschnitte zwischen Knoten |
+| `Gleisknoten` | Point | Weichen, Modulgrenzen, Gleisenden |
+| `Hüllkurve` ¹ | Polygon | Umgrenzungspolygon des Streckenmoduls (Geländeformer) |
+
+¹ Optional; nur wenn **Hüllkurve importieren** aktiviert ist.
 
 ---
 
@@ -176,9 +179,12 @@ Kanten und Knoten teilen einen gemeinsamen **Namensschlüssel**:
 |---|---|
 | `knotenname_von` | `knotenname` |
 | `knotenname_bis` | `knotenname` |
+| `bst_von` | `bst_name` |
+| `bst_bis` | `bst_name` |
 
 `knotenname_von`/`knotenname_bis` können `NULL` sein, wenn am Endpunkt kein
-benannter Knoten liegt.
+benannter Knoten liegt. `bst_von`/`bst_bis` sind nur gefüllt, wenn der jeweilige
+Endknoten ein Weichenknoten mit gesetztem `NameBetriebsstelle`-Attribut ist.
 
 ---
 
@@ -279,8 +285,8 @@ Signalnamen von Weichenknoten (Typ `Weiche`) werden vor dem Speichern normalisie
   wird in Großbuchstaben übernommen.
 - Kein Match → Signalname wird unverändert übernommen.
 
-Das Normalisieren ist standardmäßig aktiv und kann im Import-Dialog
-(Registerkarte **🔧 Elemente**, Checkbox **Namen von Weichenknoten normalisieren**) oder
+Das Normalisieren ist standardmäßig aktiv und kann im Einstellungsmenü
+(Option **4. Namen von Weichenknoten normalisieren**) oder
 im CLI per `--no-normalize-switches` deaktiviert werden.
 
 | Eingangsname | Normalisierter `knotenname` | Anmerkung |
@@ -384,8 +390,100 @@ Die Weiterverarbeitung der Feature-Dicts ist aufruferabhängig:
 
 | Kontext | Ausgabe |
 |---|---|
-| Python-Bibliothek | Zwei `memory`-Layer; Layer-Namen `<stem> – Gleiskante` / `<stem> – Gleisknoten` |
-| CLI (`core/cli.py`) | GeoPackage mit Layern `Gleiskante` / `Gleisknoten` (via `geopandas`/`shapely`) |
+| Python-Bibliothek (`st3Converter.convert()`) | Gibt `(nodes_features, edges_features)` zurück — Feature-Listen ohne GeoPackage-Schreibzugriff |
+| CLI (`core/cli.py`) | GeoPackage mit Layern `Gleiskante` / `Gleisknoten` / optional `Hüllkurve` (via `geopandas`/`shapely`) |
+
+## Hüllkurven-Import
+
+### Fachliche Bedeutung
+
+Neben dem Gleistopologie-Algorithmus (Schritte 1–8) kann aus jeder `.st3`-Datei
+optional ein **Umgrenzungspolygon** (Hüllkurve) importiert werden. Die Hüllkurve
+beschreibt den geografischen Geltungsbereich des Streckenmoduls für den sog.
+**Geländeformer** in Zusi 3 — sie umreißt das Gebiet, für das das Modul
+Höhenformationen und Geländestrukturen definiert. Sie ist ein einfaches Polygon
+ohne feste Punktanzahl.
+
+### XML-Struktur
+
+```xml
+<Strecke>
+  <UTM UTM_WE="472" UTM_NS="5509" UTM_Zone="32" UTM_Zone2="U"/>
+  <Huellkurve>
+    <PunktXYZ X="2497.085"  Y="4725.0908"/>
+    <PunktXYZ X="-2323.53"  Y="6052.373"/>
+    <PunktXYZ X="-2244.7129" Y="-4880.5708"/>
+    <PunktXYZ X="2725.999"  Y="-4340.1792"/>
+  </Huellkurve>
+  ...
+</Strecke>
+```
+
+`<Huellkurve>` ist ein direktes Kindelement von `<Strecke>`; es gibt pro `.st3`-Datei
+höchstens eine Hüllkurve. Die `X`/`Y`-Attribute der `<PunktXYZ>`-Knoten sind relativ
+zum **selben `<UTM>`-Referenzpunkt** wie die `<g>`/`<b>`-Koordinaten der StrElemente:
+
+```
+abs_x = UTM_WE * 1000 + X
+abs_y = UTM_NS * 1000 + Y
+```
+
+Die Anzahl der Punkte ist variabel (mindestens 3). Das Polygon ist im Format **nicht**
+explizit geschlossen (letzter Punkt ≠ erster Punkt); der Import schließt den Ring
+beim Erstellen des WKT/`shapely.Polygon` automatisch.
+
+### Implementierung (`convert/convert_envelope.py`)
+
+Die Funktion `convert_envelope()` im Unterpaket `convert/` kann eigenständig oder
+optimiert zusammen mit `st3Converter` aufgerufen werden:
+
+```python
+convert_envelope(
+    input_path,           # Pfad zur .st3-Datei
+    target_epsg=31467,    # Ziel-KBS
+    auto_detect_crs=True, # UTM-Zone aus <UTM UTM_Zone> lesen
+    fallback_epsg=32632,  # Rückfall-KBS
+    _route_el=None,       # interner Parameter: bereits geparstes <Strecke>-Element
+) -> list  # [] oder [Feature-Dict]
+```
+
+`_route_el` ist ein **interner** Parameter (Unterstrich-Konvention): Wird das
+already-geparste lxml-`<Strecke>`-Element übergeben, entfällt `ET.parse()` vollständig
+— kein zweiter Disk-Zugriff, kein zweiter XML-Parse. Im CLI-Modus bleibt der Parameter
+`None`; die Funktion parst die Datei dann selbstständig.
+
+Rückgabe: Liste mit **0 oder 1** Feature-Dict:
+
+```python
+[{
+    "geometry": [(x1, y1), (x2, y2), …],   # transformierte Koordinaten, Ring nicht geschlossen
+    "attrs":    {"id": 1, "streckenmodul": "<dateistem>", "utm_zone": 32},
+}]
+```
+
+Leer, wenn kein `<Huellkurve>`-Element vorhanden ist oder weniger als 3 Punkte enthalten sind.
+Bei fehlerhafter Datei gibt die Funktion ebenfalls `[]` zurück (kein `raise`).
+
+Die UTM-Zone wird **immer dynamisch** aus dem `<UTM UTM_Zone>`-Attribut der jeweiligen
+Datei bestimmt (`source_epsg = 32600 + utm_zone`). Der `fallback_epsg`-Parameter greift
+nur dann, wenn `auto_detect_crs=False` übergeben wird.
+
+Für die Koordinatentransformation nutzt das Modul einen **modulweiten Transformer-Cache**
+(`_TRANSFORMER_CACHE: dict`). Pyproj-`Transformer`-Objekte werden je
+`(source_epsg, target_epsg)`-Schlüsselpaar einmalig erzeugt und danach wiederverwendet.
+Im Batch-Betrieb mit vielen Dateien gleicher Projektion entfällt so der wiederholte
+pyproj-Datenbank-Lookup.
+
+### Steuerung
+
+| Kontext | Option |
+|---|---|
+| CLI | `--import-envelope` / `--no-import-envelope` |
+| Einstellungsmenü (interaktiv) | Option **7. Hüllkurve importieren** |
+| `Config`-Schlüssel | `import_envelope` (bool, Default `true`) |
+
+---
+
 
 ---
 
@@ -402,6 +500,13 @@ das Streckennetz eines geografischen Moduls (Ausschnitt).
 
     <!-- Koordinaten-Ursprung für alle relativen g/b-Angaben -->
     <UTM UTM_WE="537" UTM_NS="5315" UTM_Zone="32" />
+
+    <!-- Umgrenzungspolygon für den Geländeformer (optional) -->
+    <Huellkurve>
+      <PunktXYZ X="2497.085"  Y="4725.0908"/>
+      <PunktXYZ X="-2323.53"  Y="6052.373"/>
+      ...
+    </Huellkurve>
 
     <!-- Geometrie- und Topologieelement -->
     <StrElement Nr="1" Fkt="0" ...>
@@ -542,7 +647,17 @@ relevant; alle anderen Bits beeinflussen Rendering und Fahrwegsicherung, nicht d
 |  50 |  – |  x |  – |  –  |  x  |  x |
 |  51 |  x |  x |  – |  –  |  x  |  x |
 |  52 |  – |  – |  x |  –  |  x  |  x |
-
+|  53 |  x |  – |  x |  –  |  x  |  x |
+|  54 |  – |  x |  x |  –  |  x  |  x |
+|  55 |  x |  x |  x |  –  |  x  |  x |
+|  56 |  – |  – |  – |  x  |  x  |  x |
+|  57 |  x |  – |  – |  x  |  x  |  x |
+|  58 |  – |  x |  – |  x  |  x  |  x |
+|  59 |  x |  x |  – |  x  |  x  |  x |
+|  60 |  – |  – |  x |  x  |  x  |  x |
+|  61 |  x |  – |  x |  x  |  x  |  x |
+|  62 |  – |  x |  x |  x  |  x  |  x |
+|  63 |  x |  x |  x |  x  |  x  |  x |
 ---
 
 ## Paket-Struktur
@@ -552,6 +667,9 @@ st3-Import/
   ├─ st3_converter.py        # Klasse st3Converter (Konvertierungslogik, 8 Schritte)
   ├─ config/
   │    └─ st3_converter_config.json   # Persistente Einstellungen
+  ├─ convert/
+  │    ├─ __init__.py
+  │    └─ convert_envelope.py  # Hüllkurven-Import (convert_envelope())
   └─ core/
        ├─ core.py            # VERSION, Logging, Config-Klasse, print()-Wrapper
        ├─ cli.py             # CLI (interaktiver Modus + argparse)
@@ -564,9 +682,10 @@ gleichermaßen genutzt werden. Konstruktor:
 
 ```python
 st3Converter(
-    input_path,        # Pfad zur .st3-Datei
-    target_epsg=31467, # Ziel-KBS
+    input_path,                  # Pfad zur .st3-Datei
+    target_epsg=31467,           # Ziel-KBS
     auto_detect_crs=True,
+    normalize_switch_names=True, # Weichenknoten-Namen normalisieren
     progress_callback=None
 )
 ```
@@ -585,6 +704,7 @@ Verwaltet die persistenten Einstellungen; lädt/speichert
 | `fallback_epsg` | `32632` | Rückfall-KBS wenn Auto-Erkennung fehlschlägt |
 | `target_epsg` | `31467` | Ziel-KBS der Ausgabe-Geometrien |
 | `normalize_switch_names` | `true` | Namen von Weichenknoten normalisieren (W/EW/DKW-Präfix und ESTW-Bereichskennziffer entfernen) |
+| `import_envelope` | `true` | Hüllkurve aus `<Huellkurve>` als Polygon-Layer importieren |
 | `create_log_file` | `true` | `.log`-Datei neben Eingabedatei anlegen |
 | `open_log_file` | `false` | Protokoll nach Abschluss öffnen |
 
@@ -597,25 +717,22 @@ Standard-Einstiegspunkt mit zwei Modi:
 - **CLI-Modus** (`python core/cli.py -i ... -o ...`): Argparse-basiert; alle
   Konvertierungsoptionen über Schalter steuerbar.
 
-Ausgabe ist stets ein GeoPackage (via `geopandas`/`shapely`).
-|  53 |  x |  – |  x |  –  |  x  |  x |
-|  54 |  – |  x |  x |  –  |  x  |  x |
-|  55 |  x |  x |  x |  –  |  x  |  x |
-|  56 |  – |  – |  – |  x  |  x  |  x |
-|  57 |  x |  – |  – |  x  |  x  |  x |
-|  58 |  – |  x |  – |  x  |  x  |  x |
-|  59 |  x |  x |  – |  x  |  x  |  x |
-|  60 |  – |  – |  x |  x  |  x  |  x |
-|  61 |  x |  – |  x |  x  |  x  |  x |
-|  62 |  – |  x |  x |  x  |  x  |  x |
-|  63 |  x |  x |  x |  x  |  x  |  x |
+Ausgabe ist stets ein GeoPackage (via `geopandas`/`shapely`). Ist der Hüllkurven-Import
+aktiv, wird ein dritter Layer `Hüllkurve` in dieselbe `.gpkg`-Datei geschrieben.
+
+**Hüllkurven-spezifische Schalter:**
+
+| Schalter | Bedeutung |
+|---|---|
+| `--import-envelope` | Hüllkurven-Import erzwingen (unabhängig von gespeicherter Config) |
+| `--no-import-envelope` | Hüllkurven-Import deaktivieren |
 
 ### Signal-Elemente
 
 Innerhalb eines `StrElement` können `<Signal>`-Kindelemente auftreten:
 
 - **`SignalTyp="1"`**: Tafel – wird im Import nicht zur Knotenbildung herangezogen
-- **`SignalTyp="2"`**: Weichensignal – liefert `Signalname`, Bauart aus `SignalFrame`-Dateinamen  
+- **`SignalTyp="2"`**: Weichensignal – liefert `Signalname`, Bauart aus `SignalFrame`-Dateinamen und `NameBetriebsstelle` (→ `bst_name` am Weichenknoten)
   (Präfix vor `_Schienen` im `.ls3`-Dateinamen, z. B. `54_760_1-18_5_Rechts`)
 - **`SignalFrame/Datei`**: Pfad zur 3D-Grafikdatei; enthält der Dateiname den Teilstring
   `_Schienen` (case-insensitiv), wird das Präfix davor (letzter Pfadabschnitt, führende und
@@ -720,6 +837,8 @@ Attribute weg, wenn ihr Wert dem Standardwert entspricht.
 | `id` | Integer | Laufende Kanten-Nummer |
 | `knotenname_von` | String (200) | Name des Gleisknotens am Anfangspunkt der Kante |
 | `knotenname_bis` | String (200) | Name des Gleisknotens am Endpunkt der Kante |
+| `bst_von` | String (200) | `NameBetriebsstelle` des Weichenknotens am Anfangspunkt; `NULL` wenn kein Weichenknoten |
+| `bst_bis` | String (200) | `NameBetriebsstelle` des Weichenknotens am Endpunkt; `NULL` wenn kein Weichenknoten |
 | `km_von` | Double (6 Nachkommastellen) | Kilometerstand am ersten StrElement der Kante |
 | `km_bis` | Double (6 Nachkommastellen) | Kilometerstand am letzten StrElement der Kante |
 | `strelemente_anz` | Integer | Anzahl der StrElemente in der Kante |
@@ -727,6 +846,7 @@ Attribute weg, wenn ihr Wert dem Standardwert entspricht.
 | `strelement_bis` | Integer | `Nr` des letzten StrElements |
 
 > `knotenname_von`/`knotenname_bis` können `NULL` sein, wenn am Endpunkt kein benannter Knoten liegt.
+> `bst_von`/`bst_bis` sind nur gesetzt, wenn der jeweilige Endknoten ein Weichenknoten mit `NameBetriebsstelle`-Signal ist.
 > Mehrere Features können dasselbe Knotenpaar (`knotenname_von`, `knotenname_bis`) aufweisen
 > (Parallelgleise); sie sind über `strelement_von` eindeutig unterscheidbar.
 
@@ -736,6 +856,7 @@ Attribute weg, wenn ihr Wert dem Standardwert entspricht.
 |---|---|---|
 | `id` | Integer | Laufende Knoten-Nummer |
 | `knotenname` | String (200) | Weiche mit Signal: normalisierter Signalname (Präfixe W/EW/DKW entfernt, DKW-Suffix in Großbuchstaben); Weiche ohne Signal: auto-generiert `<dateistem>_<nr>X`; Modulgrenze: `<dateistem>_<nr>G`; Gleisende: `<dateistem>_<nr>E` |
+| `bst_name` | String (200) | `NameBetriebsstelle` des Weichensignals (SignalTyp 2); `NULL` bei allen anderen Knotentypen |
 | `typ` | String (200) | `Weiche`, `Modulgrenze`, `Gleisende` |
 | `knotenbeschr` | String (200) | Weichenbauart (Präfix aus `_Schienen`-Dateinamen), z. B. `54_760_1-18_5_Rechts` |
 | `nr` | Integer | `Nr`-Attribut des zugehörigen StrElements |
@@ -753,3 +874,13 @@ Attribute weg, wenn ihr Wert dem Standardwert entspricht.
 
 `<dateistem>` ist der Dateiname der importierten `.st3`-Datei ohne Erweiterung (z. B. `Freudenstein_2025`).
 Damit sind Auto-Knotennamen modul-übergreifend eindeutig, auch wenn mehrere Module zusammengeführt werden.
+
+### Hüllkurven-Layer (`Polygon`)
+
+| Feldname | Typ | Beschreibung |
+|---|---|---|
+| `id` | Integer | Laufende Polygon-Nummer (1 im Einzelimport; 1…n im Batch) |
+| `streckenmodul` | String (400) | Datei-Stem des Quellmoduls (z. B. `Freudenstein_2025`) |
+| `utm_zone` | Integer | UTM-Zonennummer aus `<UTM UTM_Zone>` der Quelldatei (z. B. `32`) |
+
+Layer-Name im GeoPackage: `Hüllkurve`

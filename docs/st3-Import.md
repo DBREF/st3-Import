@@ -11,11 +11,11 @@ Knoten-Kanten-Modell. Pro verarbeiteter Datei entstehen zwei Layer:
 
 | Layer-Name | Geometrietyp | Inhalt |
 |---|---|---|
-| `<stem> – Gleiskante` | LineString | Gleisabschnitte zwischen Knoten |
-| `<stem> – Gleisknoten` | Point | Weichen, Modulgrenzen, Gleisenden |
+| `Gleiskante` | LineString | Gleisabschnitte zwischen Knoten |
+| `Gleisknoten` | Point | Weichen, Modulgrenzen, Gleisenden |
+| `Hüllkurve` ¹ | Polygon | Umgrenzungspolygon des Streckenmoduls (Geländeformer) |
 
-`<stem>` ist der Dateiname der `.st3`-Datei ohne Erweiterung
-(z. B. `Freudenstein_2025`).
+¹ Optional; nur wenn **Hüllkurve importieren** aktiv ist.
 
 > **Knotenname bei Weichen:** Das Feld `knotenname` wird aus dem Signalnamen des
 > Weichensignals (SignalTyp 2) normalisiert – Buchstaben-Präfixe wie `W`, `EW`, `DKW`
@@ -26,6 +26,12 @@ Knoten-Kanten-Modell. Pro verarbeiteter Datei entstehen zwei Layer:
 > `normalize_switch_names=False` (Python-API) deaktivieren, um Signalnamen
 > unverändert zu übernehmen.
 > Details siehe [st3-Import (Technisch).md](st3-Import%20(Technisch).md#namen-von-weichenknoten-normalisieren).
+
+> **Betriebsstelle bei Weichen:** Trägt ein Weichensignal (SignalTyp 2) das Attribut
+> `NameBetriebsstelle` (z. B. `Bickenbach`), wird dieser Wert im Knoten-Layer als `bst_name`
+> gespeichert. Im Kanten-Layer erhalten die anliegenden Kanten die Felder `bst_von` und
+> `bst_bis` aus dem jeweiligen Endknoten – analog zu `knotenname_von`/`knotenname_bis`.
+> Grenzt eine Kante an einen Nicht-Weichen-Knoten, bleibt das Feld leer.
 
 `st3Converter` ist auf zwei Wegen nutzbar:
 
@@ -64,6 +70,8 @@ Alle Einstellungen werden dauerhaft in `config/st3_converter_config.json` gespei
     "auto_detect_crs": true,
     "fallback_epsg": 32632,
     "target_epsg": 31467,
+    "normalize_switch_names": true,
+    "import_envelope": true,
     "create_log_file": true,
     "open_log_file": false
 }
@@ -82,16 +90,18 @@ Führt einen menügesteuerten Eingabedialog (Eingabedatei, Ziel-KBS, Optionen). 
 Dateisuche läuft dreistufig: zunächst im Arbeitsverzeichnis, dann nach manuellem
 Ordnerpfad, schließlich nach direkter Pfadangabe.
 
-Im Einstellungsmenü (Option S) stehen folgende Optionen zur Verfügung:
+Im Einstellungsmenü (Hauptmenü-Option **2**) stehen folgende Optionen zur Verfügung:
 
 | Option | Beschreibung |
 |---|---|
 | 1 | Quell-KBS automatisch erkennen (ein/aus) |
 | 2 | Rückfall-KBS festlegen |
 | 3 | Ziel-KBS festlegen |
-| 4 | Protokoll erstellen (ein/aus) |
-| 5 | Protokoll nach Abschluss öffnen (ein/aus) |
-| 6 | Einstellungen in JSON-Datei speichern |
+| 4 | Namen von Weichenknoten normalisieren (ein/aus) |
+| 5 | Protokoll erstellen (ein/aus) |
+| 6 | Protokoll nach Abschluss öffnen (ein/aus) |
+| 7 | Hüllkurve importieren (ein/aus) |
+| 8 | Einstellungen in JSON-Datei speichern |
 | 0 | Zurück |
 
 ### CLI-Modus
@@ -108,11 +118,13 @@ python core/cli.py -i <Eingabe.st3> -o <Ausgabe.gpkg> [Optionen]
 | `--no-auto-detect` | Automatische CRS-Erkennung deaktivieren |
 | `--fallback-epsg CODE` | Rückfall-KBS wenn Auto-Erkennung fehlschlägt (Standard: aus JSON-Config) |
 | `--no-normalize-switches` | Weichenknoten-Normalisieren deaktivieren (Signalnamen unverändert übernehmen) |
+| `--import-envelope` | Hüllkurve importieren (unabhängig von gespeicherter Config erzwingen) |
+| `--no-import-envelope` | Hüllkurven-Import deaktivieren |
 | `--open-log` | Protokoll nach Abschluss automatisch öffnen |
 | `-v / --version` | Versionsnummer ausgeben |
 
-Die Ausgabe ist ein GeoPackage mit zwei Layern: `Gleiskante` (LineString) und
-`Gleisknoten` (Point), im gewählten Ziel-KBS.
+Die Ausgabe ist ein GeoPackage mit den Layern `Gleiskante` (LineString) und
+`Gleisknoten` (Point) — sowie optional `Hüllkurve` (Polygon) — im gewählten Ziel-KBS.
 
 ---
 
@@ -149,3 +161,22 @@ Rückgabe von `convert()`:
 
 Die Attributfelder entsprechen den in [st3-Import (Technisch).md → Zielattribute](st3-Import%20(Technisch).md#zielattribute)
 beschriebenen Feldern.
+
+### Direktaufruf der Hüllkurven-Konvertierung
+
+```python
+from convert.convert_envelope import convert_envelope
+
+envelope_features = convert_envelope(
+    input_path=r"C:\...\Freudenstein_2025.st3",
+    target_epsg=31467,
+    auto_detect_crs=True,
+    fallback_epsg=32632,
+)
+
+# Leer, wenn kein <Huellkurve>-Element vorhanden
+if envelope_features:
+    feat = envelope_features[0]
+    # feat["geometry"]: [(x1, y1), (x2, y2), ...] — Ring nicht geschlossen
+    # feat["attrs"]:    {"id": 1, "streckenmodul": "Freudenstein_2025", "utm_zone": 32}
+```

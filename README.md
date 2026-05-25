@@ -12,6 +12,7 @@ Ausgabe als GeoPackage (`.gpkg`).
 - Erkennung und Normalisierung von Weichen-Signalnamen (EW, DKW, EKW)
 - Propagation von Weichenbauform-Beschriftungen über BoundingR-Radius
 - Kilometrierungsinterpolation entlang Kanten aus StrElement-km-Attributen
+- Import der Hüllkurve (`<Huellkurve>`) als Polygon-Layer in das GeoPackage
 - Validierungswarnungen: Nulllängen-Elemente, hochgradige Vertices (Grad ≥ 5), Koordinatenabweichungen (> 5 cm), isolierte Komponenten, geschlossene Schleifen
 - Interaktiver Modus und direkter CLI-Modus mit Parametern
 - Persistente Konfiguration über JSON-Datei (`config/st3_converter_config.json`)
@@ -22,6 +23,7 @@ Ausgabe als GeoPackage (`.gpkg`).
 |---|---|---|
 | `Gleiskante` | LineString | Gleisabschnitte zwischen Knoten |
 | `Gleisknoten` | Point | Weichen, Modulgrenzen, Gleisenden |
+| `Hüllkurve` | Polygon | Streckenbegrenzung (optional, aus `<Huellkurve>`) |
 
 Die Ausgabe erfolgt als GeoPackage (`.gpkg`) neben der Eingabedatei oder an einem gewählten Pfad.
 
@@ -33,9 +35,12 @@ st3-Import/
 ├── requirements.txt            # Python-Abhängigkeiten
 ├── config/
 │   └── st3_converter_config.json  # Persistente Einstellungen
+├── convert/
+│   ├── __init__.py             # Paket-Init
+│   └── convert_envelope.py     # Hüllkurven-Import aus <Huellkurve>-Element
 ├── core/
 │   ├── cli.py                  # CLI-Einstiegspunkt, interaktiver Modus, GeoPackage-Export
-│   ├── core.py                 # Logging-System, Versionskonstante, Config-Klasse
+│   └── core.py                 # Logging-System, Versionskonstante, Config-Klasse
 ├── docs/
 │   ├── st3-Import.md           # Bedienungsanleitung und Konfigurationsreferenz
 │   └── st3-Import (Technisch).md  # Algorithmus, Datenformat, Zielmodell
@@ -86,6 +91,8 @@ python -m core.cli --version
 | `--no-auto-detect` | Automatische CRS-Erkennung deaktivieren |
 | `--fallback-epsg` | Rückfall-EPSG wenn Auto-Erkennung fehlschlägt (Standard: `32632`) |
 | `--no-normalize-switches` | Normalisierung von Weichenknoten-Signalnamen deaktivieren |
+| `--import-envelope` | Hüllkurven-Polygon importieren und als Layer speichern |
+| `--no-import-envelope` | Hüllkurven-Import deaktivieren |
 | `--open-log` | Protokolldatei nach Abschluss automatisch öffnen |
 | `-v`, `--version` | Versionsnummer anzeigen |
 
@@ -111,6 +118,7 @@ nodes_features, edges_features = converter.convert()
 | `fallback_epsg` | `32632` | Rückfall-KBS wenn Auto-Erkennung fehlschlägt |
 | `target_epsg` | `31467` | Ziel-KBS der Ausgabelayer |
 | `normalize_switch_names` | `true` | Weichen-Signalnamen normalisieren |
+| `import_envelope` | `true` | Hüllkurven-Polygon aus `<Huellkurve>` importieren |
 | `create_log_file` | `true` | Protokolldatei (`.log`) erstellen |
 | `open_log_file` | `false` | Protokolldatei nach Abschluss öffnen |
 

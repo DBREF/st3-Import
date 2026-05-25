@@ -70,6 +70,8 @@ class _UnionFind:
 
 
 # Hauptklasse
+
+
 class st3Converter:
     """Konvertiert eine Zusi-3-Streckendatei (.st3) in ein Knoten-Kanten-Modell.
 
@@ -152,6 +154,7 @@ class st3Converter:
         route = root.find("Strecke")
         if route is None:
             raise ValueError(f"Kein <Strecke>-Element in {self.input_path}")
+        self._route = route  # für externen Wiederaufruf (z. B. convert_envelope)
 
         utm = route.find("UTM")
         if utm is None:
@@ -262,6 +265,7 @@ class st3Converter:
                         "name": sig_name,
                         "frame_dateien": frame_dateien,
                         "bounding_r": float(sig.get("BoundingR", "0") or "0"),
+                        "betriebsstelle": sig.get("NameBetriebsstelle", "") or "",
                     }
                 )
 
@@ -365,14 +369,17 @@ class st3Converter:
 
             # Signal-Attribute (alle Elemente an diesem Vertex prüfen)
             signal_name = None
+            bst_name = None
             knotenbeschr = ""
             knotenbeschr_r = 0.0
             for elem_nr, _ in inc:
                 elem = elems.get(elem_nr, {})
                 for sig in elem.get("signals", []):
-                    if sig.get("typ") == "2":
+                    if sig.get("typ") in ("1", "2"):
                         if not signal_name:
                             signal_name = sig.get("name") or None
+                        if not bst_name:
+                            bst_name = sig.get("betriebsstelle") or None
                         if not knotenbeschr:
                             for fd in sig.get("frame_dateien", []):
                                 idx = fd.lower().find("_schienen")
@@ -403,6 +410,7 @@ class st3Converter:
                         "vertex": v,
                         "typ": typ,
                         "knotenname": knotenname,
+                        "bst_name": bst_name if typ == "Weiche" else None,
                         "knotenbeschr": knotenbeschr,
                         "knotenbeschr_r": knotenbeschr_r,
                         "nr": repr_nr,
@@ -642,10 +650,14 @@ class st3Converter:
         """
         # Knotenname-Lookup: vertex_id → knotenname (Weiche hat Vorrang)
         v_to_name: dict = {}
+        # Betriebsstellen-Lookup: vertex_id → bst_name (nur Weichenknoten)
+        v_to_bst: dict = {}
         for kn in nodes_raw:
             v = kn["vertex"]
             if v not in v_to_name or kn["typ"] == "Weiche":
                 v_to_name[v] = kn["knotenname"]
+            if kn["typ"] == "Weiche" and kn.get("bst_name"):
+                v_to_bst[v] = kn["bst_name"]
 
         visited: set = set()  # besuchte elem_nr
         kanten = []
@@ -670,6 +682,8 @@ class st3Converter:
                         "pts_utm": pts_utm,
                         "knotenname_von": v_to_name.get(bp_v),
                         "knotenname_bis": v_to_name.get(exit_v),
+                        "bst_von": v_to_bst.get(bp_v),
+                        "bst_bis": v_to_bst.get(exit_v),
                         "km_von": km_von,
                         "km_bis": km_bis,
                         "strelemente_anz": len(elem_seq),
@@ -701,6 +715,8 @@ class st3Converter:
                     "pts_utm": pts_utm,
                     "knotenname_von": None,
                     "knotenname_bis": None,
+                    "bst_von": None,
+                    "bst_bis": None,
                     "km_von": km_von,
                     "km_bis": km_bis,
                     "strelemente_anz": len(elem_seq),
@@ -869,6 +885,8 @@ class st3Converter:
                         "id": k["id"],
                         "knotenname_von": k["knotenname_von"],
                         "knotenname_bis": k["knotenname_bis"],
+                        "bst_von": k.get("bst_von"),
+                        "bst_bis": k.get("bst_bis"),
                         "km_von": k["km_von"],
                         "km_bis": k["km_bis"],
                         "strelemente_anz": k["strelemente_anz"],
@@ -886,6 +904,7 @@ class st3Converter:
                     "attrs": {
                         "id": i,
                         "knotenname": kn["knotenname"],
+                        "bst_name": kn.get("bst_name"),
                         "typ": kn["typ"],
                         "knotenbeschr": kn["knotenbeschr"],
                         "strelement_nr": kn["nr"],

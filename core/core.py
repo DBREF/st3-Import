@@ -10,7 +10,7 @@ from pathlib import Path
 # --- Version ---
 VERSION = "1.0.0"
 
-# --- Logging ---
+# --- Logging-System ---
 logger = logging.getLogger("st3_converter")
 logger.setLevel(logging.DEBUG)
 logger.propagate = False  # Nicht an Root-Logger weitergeben
@@ -40,6 +40,7 @@ _setup_logging()
 
 def print(*args, **kwargs) -> None:  # noqa: A001
     """Modul-weiter print()-Wrapper: routet alle Ausgaben durch das Logging-System.
+
     Identisches Verhalten wie builtin print() via StreamHandler → stdout.
     """
     file = kwargs.get("file", None)
@@ -89,6 +90,7 @@ class Config:
             "fallback_epsg": 32632,
             "target_epsg": 31467,
             "normalize_switch_names": True,
+            "import_envelope": True,
             "create_log_file": True,
             "open_log_file": False,
         }
