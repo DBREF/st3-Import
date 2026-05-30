@@ -1,8 +1,8 @@
 # st3-Import: Handbuch
 
-**Version:** 1.0.0 
+**Version:** 1.0.1  
 **Autor:** Fabian Schöpflin  
-**Datum:** 25. Mai 2026
+**Datum:** 30. Mai 2026
 
 ## Übersicht
 
@@ -89,6 +89,12 @@ python core/cli.py
 Führt einen menügesteuerten Eingabedialog (Eingabedatei, Ziel-KBS, Optionen). Die
 Dateisuche läuft dreistufig: zunächst im Arbeitsverzeichnis, dann nach manuellem
 Ordnerpfad, schließlich nach direkter Pfadangabe.
+
+Nach der Dateiauswahl kann ein **Ausgabeverzeichnis** angegeben werden. Ist das
+Eingabeverzeichnis schreibgeschützt (z. B. `C:\Program Files\...`), wird automatisch
+das aktuelle Arbeitsverzeichnis als Standard vorgeschlagen. Nicht vorhandene
+Verzeichnisse werden auf Wunsch automatisch angelegt. Pfadangaben mit
+Anführungszeichen werden automatisch bereinigt.
 
 Im Einstellungsmenü (Hauptmenü-Option **2**) stehen folgende Optionen zur Verfügung:
 

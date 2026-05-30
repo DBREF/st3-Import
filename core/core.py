@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 # --- Version ---
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 
 # --- Logging-System ---
 logger = logging.getLogger("st3_converter")
@@ -120,6 +120,14 @@ class Config:
     def get(self, key: str, default=None):
         """Gibt einen Einstellungswert zurück."""
         return self.settings.get(key, default)
+
+    def __getitem__(self, key: str):
+        """Ermöglicht dict-ähnlichen Zugriff: config["key"]."""
+        return self.settings[key]
+
+    def __setitem__(self, key: str, value):
+        """Ermöglicht dict-ähnliche Zuweisung: config["key"] = value."""
+        self.settings[key] = value
 
     def set(self, key: str, value):
         """Setzt einen Einstellungswert."""

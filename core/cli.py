@@ -240,19 +240,53 @@ def _write_gpkg(
 
 
 # Hilfsfunktionen für interactive_mode
-def _ask_output_and_confirm(input_file: Path, config: dict) -> tuple | None:
-    """Fragt nach Ausgabedateiname, zeigt Zusammenfassung und bestätigt.
+def _ask_output_and_confirm(input_file: Path, config) -> tuple | None:
+    """Fragt nach Ausgabeverzeichnis und -dateiname, zeigt Zusammenfassung und bestätigt.
 
     Returns:
         (input_file, output_file, config) oder None bei Abbruch.
     """
+    # Standard-Ausgabeverzeichnis: Eingabeverzeichnis (falls beschreibbar), sonst cwd
+    input_dir = input_file.parent
+    _writable = False
+    try:
+        _test = input_dir / ".st3_write_test"
+        _test.touch()
+        _test.unlink()
+        _writable = True
+    except (PermissionError, OSError):
+        pass
+
+    default_output_dir = input_dir if _writable else Path.cwd()
+
+    if not _writable:
+        print(f"\n⚠ Eingabeverzeichnis ist schreibgeschützt: {input_dir}")
+        print(f"  Standard-Ausgabeverzeichnis: {default_output_dir}")
+
+    print("\nAusgabeverzeichnis (GeoPackage):")
+    print(f"   Standard: {default_output_dir}")
+    dir_input = input("   Verzeichnis [Enter für Standard]: ").strip().strip("\"'")
+
+    if dir_input:
+        output_dir = Path(dir_input)
+        if not output_dir.is_dir():
+            try:
+                output_dir.mkdir(parents=True, exist_ok=True)
+                print(f"  ✓ Verzeichnis erstellt: {output_dir}")
+            except Exception as e:
+                print(f"  [FEHLER] Verzeichnis konnte nicht erstellt werden: {e}")
+                print(f"  Verwende Standard: {default_output_dir}")
+                output_dir = default_output_dir
+    else:
+        output_dir = default_output_dir
+
     print("\nName der Ausgabedatei (GeoPackage):")
     default_name = input_file.stem + ".gpkg"
     output_name = input(f"   Dateiname [{default_name}]: ").strip() or default_name
     if not output_name.endswith(".gpkg"):
         output_name += ".gpkg"
 
-    output_file = str(input_file.parent / output_name)
+    output_file = str(output_dir / output_name)
     print(f"\n✓ Ausgabedatei: {output_file}")
 
     print("\n" + "=" * 70)
@@ -347,9 +381,11 @@ def interactive_mode() -> tuple | None:
 
     # 2. Versuch: Ordner abfragen
     print("\n⚠ Keine .st3-Dateien im aktuellen Verzeichnis gefunden.")
-    folder_input = input(
-        "\nOrdner mit .st3-Dateien angeben (oder Enter zum Überspringen): "
-    ).strip()
+    folder_input = (
+        input("\nOrdner mit .st3-Dateien angeben (oder Enter zum Überspringen): ")
+        .strip()
+        .strip("\"'")
+    )
 
     if folder_input:
         folder_path = Path(folder_input)
@@ -386,7 +422,11 @@ def interactive_mode() -> tuple | None:
     print("-" * 70)
 
     while True:
-        user_input = input("\nPfad zur .st3-Datei (oder Enter zum Abbrechen): ").strip()
+        user_input = (
+            input("\nPfad zur .st3-Datei (oder Enter zum Abbrechen): ")
+            .strip()
+            .strip("\"'")
+        )
         if not user_input:
             return None
         file_path = Path(user_input)

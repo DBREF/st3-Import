@@ -25,7 +25,7 @@ Ausgabe als GeoPackage (`.gpkg`).
 | `Gleisknoten` | Point | Weichen, Modulgrenzen, Gleisenden |
 | `Hüllkurve` | Polygon | Streckenbegrenzung (optional, aus `<Huellkurve>`) |
 
-Die Ausgabe erfolgt als GeoPackage (`.gpkg`) neben der Eingabedatei oder an einem gewählten Pfad.
+Die Ausgabe erfolgt als GeoPackage (`.gpkg`) in einem frei wählbaren Verzeichnis. Ist das Eingabeverzeichnis schreibgeschützt, wird automatisch das aktuelle Arbeitsverzeichnis als Standard vorgeschlagen.
 
 **Verzeichnisstruktur:**
 
