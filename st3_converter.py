@@ -259,15 +259,13 @@ class st3Converter:
                     for d_el in [sf_el.find("Datei")]
                     if d_el is not None and d_el.get("Dateiname", "")
                 ]
-                signals.append(
-                    {
-                        "typ": sig_typ,
-                        "name": sig_name,
-                        "frame_dateien": frame_dateien,
-                        "bounding_r": float(sig.get("BoundingR", "0") or "0"),
-                        "betriebsstelle": sig.get("NameBetriebsstelle", "") or "",
-                    }
-                )
+                signals.append({
+                    "typ": sig_typ,
+                    "name": sig_name,
+                    "frame_dateien": frame_dateien,
+                    "bounding_r": float(sig.get("BoundingR", "0") or "0"),
+                    "betriebsstelle": sig.get("NameBetriebsstelle", "") or "",
+                })
 
             connection = int(se.get("Anschluss", "0"))
 
@@ -405,26 +403,24 @@ class st3Converter:
                     suffix = suffix_map.get(typ, "X")
                     knotenname = f"{self._stem}_{repr_nr}{suffix}"
 
-                nodes_raw.append(
-                    {
-                        "vertex": v,
-                        "typ": typ,
-                        "knotenname": knotenname,
-                        "bst_name": bst_name if typ == "Weiche" else None,
-                        "knotenbeschr": knotenbeschr,
-                        "knotenbeschr_r": knotenbeschr_r,
-                        "nr": repr_nr,
-                        "km": repr_elem.get("km"),
-                        "datei": self._stem,
-                        "nachbarmodul": module_vertices.get(v, "")
-                        if typ == "Modulgrenze"
-                        else "",
-                        "repr_side": repr_side,
-                        "repr_coord_utm": repr_elem["g_coord"]
-                        if repr_side == "g"
-                        else repr_elem["b_coord"],
-                    }
-                )
+                nodes_raw.append({
+                    "vertex": v,
+                    "typ": typ,
+                    "knotenname": knotenname,
+                    "bst_name": bst_name if typ == "Weiche" else None,
+                    "knotenbeschr": knotenbeschr,
+                    "knotenbeschr_r": knotenbeschr_r,
+                    "nr": repr_nr,
+                    "km": repr_elem.get("km"),
+                    "datei": self._stem,
+                    "nachbarmodul": module_vertices.get(v, "")
+                    if typ == "Modulgrenze"
+                    else "",
+                    "repr_side": repr_side,
+                    "repr_coord_utm": repr_elem["g_coord"]
+                    if repr_side == "g"
+                    else repr_elem["b_coord"],
+                })
 
         self._propagate_node_desc(nodes_raw)
         return bp_set, nodes_raw
@@ -675,22 +671,20 @@ class st3Converter:
                     continue
                 elem_seq, pts_utm, exit_v = result
                 km_von, km_bis = self._interpolate_km(elem_seq, pts_utm, elems)
-                kanten.append(
-                    {
-                        "id": kante_id,
-                        "elem_sequence": elem_seq,
-                        "pts_utm": pts_utm,
-                        "knotenname_von": v_to_name.get(bp_v),
-                        "knotenname_bis": v_to_name.get(exit_v),
-                        "bst_von": v_to_bst.get(bp_v),
-                        "bst_bis": v_to_bst.get(exit_v),
-                        "km_von": km_von,
-                        "km_bis": km_bis,
-                        "strelemente_anz": len(elem_seq),
-                        "strelement_von": elem_seq[0],
-                        "strelement_bis": elem_seq[-1],
-                    }
-                )
+                kanten.append({
+                    "id": kante_id,
+                    "elem_sequence": elem_seq,
+                    "pts_utm": pts_utm,
+                    "knotenname_von": v_to_name.get(bp_v),
+                    "knotenname_bis": v_to_name.get(exit_v),
+                    "bst_von": v_to_bst.get(bp_v),
+                    "bst_bis": v_to_bst.get(exit_v),
+                    "km_von": km_von,
+                    "km_bis": km_bis,
+                    "strelemente_anz": len(elem_seq),
+                    "strelement_von": elem_seq[0],
+                    "strelement_bis": elem_seq[-1],
+                })
                 kante_id += 1
 
         # Reine Zyklen (unbesuchte Elemente → keine Breakpoints in Komponente)
@@ -708,22 +702,20 @@ class st3Converter:
             self.warnings.append(msg)
             logger.warning(msg)
             km_von, km_bis = self._interpolate_km(elem_seq, pts_utm, elems)
-            kanten.append(
-                {
-                    "id": kante_id,
-                    "elem_sequence": elem_seq,
-                    "pts_utm": pts_utm,
-                    "knotenname_von": None,
-                    "knotenname_bis": None,
-                    "bst_von": None,
-                    "bst_bis": None,
-                    "km_von": km_von,
-                    "km_bis": km_bis,
-                    "strelemente_anz": len(elem_seq),
-                    "strelement_von": elem_seq[0],
-                    "strelement_bis": elem_seq[-1],
-                }
-            )
+            kanten.append({
+                "id": kante_id,
+                "elem_sequence": elem_seq,
+                "pts_utm": pts_utm,
+                "knotenname_von": None,
+                "knotenname_bis": None,
+                "bst_von": None,
+                "bst_bis": None,
+                "km_von": km_von,
+                "km_bis": km_bis,
+                "strelemente_anz": len(elem_seq),
+                "strelement_von": elem_seq[0],
+                "strelement_bis": elem_seq[-1],
+            })
             kante_id += 1
 
         return kanten
@@ -878,41 +870,37 @@ class st3Converter:
         """
         edges_out = []
         for k in edges_tf:
-            edges_out.append(
-                {
-                    "geometry": k["pts"],  # list of (x, y)
-                    "attrs": {
-                        "id": k["id"],
-                        "knotenname_von": k["knotenname_von"],
-                        "knotenname_bis": k["knotenname_bis"],
-                        "bst_von": k.get("bst_von"),
-                        "bst_bis": k.get("bst_bis"),
-                        "km_von": k["km_von"],
-                        "km_bis": k["km_bis"],
-                        "strelemente_anz": k["strelemente_anz"],
-                        "strelement_von": k["strelement_von"],
-                        "strelement_bis": k["strelement_bis"],
-                    },
-                }
-            )
+            edges_out.append({
+                "geometry": k["pts"],  # list of (x, y)
+                "attrs": {
+                    "id": k["id"],
+                    "knotenname_von": k["knotenname_von"],
+                    "knotenname_bis": k["knotenname_bis"],
+                    "bst_von": k.get("bst_von"),
+                    "bst_bis": k.get("bst_bis"),
+                    "km_von": k["km_von"],
+                    "km_bis": k["km_bis"],
+                    "strelemente_anz": k["strelemente_anz"],
+                    "strelement_von": k["strelement_von"],
+                    "strelement_bis": k["strelement_bis"],
+                },
+            })
 
         nodes_out = []
         for i, kn in enumerate(nodes_tf, 1):
-            nodes_out.append(
-                {
-                    "geometry": kn["coord"],  # (x, y)
-                    "attrs": {
-                        "id": i,
-                        "knotenname": kn["knotenname"],
-                        "bst_name": kn.get("bst_name"),
-                        "typ": kn["typ"],
-                        "knotenbeschr": kn["knotenbeschr"],
-                        "strelement_nr": kn["nr"],
-                        "km": kn["km"],
-                        "datei": kn["datei"],
-                        "nachbarmodul": kn["nachbarmodul"],
-                    },
-                }
-            )
+            nodes_out.append({
+                "geometry": kn["coord"],  # (x, y)
+                "attrs": {
+                    "id": i,
+                    "knotenname": kn["knotenname"],
+                    "bst_name": kn.get("bst_name"),
+                    "typ": kn["typ"],
+                    "knotenbeschr": kn["knotenbeschr"],
+                    "strelement_nr": kn["nr"],
+                    "km": kn["km"],
+                    "datei": kn["datei"],
+                    "nachbarmodul": kn["nachbarmodul"],
+                },
+            })
 
         return nodes_out, edges_out
